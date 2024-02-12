@@ -1,0 +1,28 @@
+# Run this file with the ABSOLUTE_DIR environment variable:
+# eg: ABSOLUTE_DIR=/absolute/path/to/your/current/folder serverless offline
+
+service: atlasnova-rest-api
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  environment:
+    NODE_ENV: local
+  stage: local
+  region: us-west-1
+
+functions:
+  app:
+    handler: dist/rest-api-bundle.handler
+    events:
+      - http: ANY /
+      - http: ANY /{proxy+}
+
+plugins:
+  - serverless-dotenv-plugin # load .env to lambda funtions
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 4000
+    httpsProtocol: ${env:ABSOLUTE_DIR} # needs to have cert.pem and key.pem in this dir

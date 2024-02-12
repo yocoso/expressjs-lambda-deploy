@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy Atlasnova Web API to Lambda, setup API Gateway and DynamoDB.
+
+Parameters:
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: The name of the S3 bucket containing the Lambda function code
+
+  LambdaCodeS3Key:
+    Type: String
+    Description: The S3 key (path) of the Lambda function code ZIP file
+
+  StageName:
+    Type: String
+    Description: The stage of current deployment, production or staging
+
+Resources:
+  RestAPILambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: rest-api-bundle.handler # match with the bundle file name
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket # Specify your S3 bucket name
+        S3Key: !Ref LambdaCodeS3Key # Specify the S3 key of your Lambda code ZIP file
+      Runtime: nodejs20.x
+      Timeout: 30
+      Environment:
+        Variables:
+          STAGE_NAME: !Ref StageName
+
+  ####### DynamoDB Table Example #######
+  UsersTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      TableName: !Sub "${StageName}-users"
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: "arn:aws:logs:*:*:*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${LambdaCodeS3Bucket}/*"
+        - PolicyName: LambdaDynamoDBPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/web-${StageName}-*"
+
+  RestAPIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "RestAPIGateway-${StageName}"
+      Description: An API Gateway to trigger the Lambda function
+
+  ProxyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIGateway
+      ParentId: !GetAtt "RestAPIGateway.RootResourceId"
+      PathPart: "{proxy+}" # Special path for proxy integration
+
+  ProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPIGateway
+      ResourceId: !Ref ProxyResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RestAPILambda.Arn}/invocations"
+
+  LambdaApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RestAPILambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIGateway}/*/*/{proxy+}"
+
+  RestAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProxyMethod
+    Properties:
+      RestApiId: !Ref RestAPIGateway
+      StageName: !Ref StageName
+
+Outputs:
+  ApiGatewayURL:
+    Description: URL of the API Gateway
+    Value: !Sub "https://${RestAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/${StageName}"

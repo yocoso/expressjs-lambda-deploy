@@ -1,0 +1,66 @@
+name: Deploy expressjs API to AWS lambda
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+      - dev
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || (github.ref == 'refs/heads/staging' && 'staging' || 'dev') }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install Dependencies
+        run: |
+          pnpm install
+
+      - name: Run Production Build
+        if: github.ref != 'refs/heads/dev'
+        run: pnpm run build:prod
+
+      - name: Run Development Build
+        if: github.ref == 'refs/heads/dev'
+        run: pnpm run build:dev
+
+      - name: Set ZIP File Name with Short SHA
+        run: echo "CODE_ZIP_FILE=rest-api-$(echo $GITHUB_SHA | cut -c 1-7).zip" >> $GITHUB_ENV
+
+      - name: Zip the bundled application
+        run: |
+          cd dist
+          zip -r ../$CODE_ZIP_FILE ./*
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} # read from github secrets
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # read from github secrets
+          aws-region: ${{ vars.AWS_REGION }} # read from github environments
+
+      - name: Upload to S3
+        run: | # read AWS_S3_BUCKET and STAGE_NAME from github environments
+          aws s3 cp $CODE_ZIP_FILE s3://${{ vars.AWS_S3_BUCKET }}/${{ vars.STAGE_NAME }}/
+
+      - name: Deploy CloudFormation Template
+        run:
+          | # read vars from github environments and secrets from github secrets
+          aws cloudformation deploy \
+            --template-file infra/cloudformation.yaml \
+            --stack-name web-api-stack-${{ vars.STAGE_NAME }} \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              LambdaCodeS3Bucket=${{ vars.AWS_S3_BUCKET }} \
+              LambdaCodeS3Key=${{ vars.STAGE_NAME }}/$CODE_ZIP_FILE \
+              StageName=${{ vars.STAGE_NAME }} \
