@@ -26,7 +26,11 @@ The deployment process involves several key steps:
 - **Uploading to Amazon S3:** Once the application is packaged, the ZIP file is uploaded to an Amazon S3 (Simple Storage Service) bucket. Amazon S3 serves as a storage solution that AWS Lambda can access to fetch the application code.
 - **Setting Up AWS Lambda:** With the code uploaded to S3, the next step is to configure an AWS Lambda function. This function is set up to execute the Express.js application. It involves specifying the runtime environment, memory, timeout settings, and the S3 bucket location of the ZIP file.
 - **Integrating with Amazon API Gateway:** To expose the Lambda function as a RESTful API, Amazon API Gateway is used. API Gateway acts as a front door to manage incoming API requests and route them to the appropriate Lambda function for execution.
-- **Implementing CI/CD with GitHub Actions:** To automate the deployment process, GitHub Actions is employed. It allows for the automation of packaging and uploading the application to S3, updating the Lambda function, and managing API Gateway configurations upon every code push to the GitHub repository, ensuring a seamless and efficient deployment pipeline.
+- **Implementing CI/CD with GitHub Actions:** To automate the deployment process, GitHub Actions is employed. It allows for the automation of packaging and uploading the application to S3, updating the Lambda function, and managing API Gateway configurations upon every code push to the GitHub repository, ensuring a seamless and efficient deployment pipeline. The deploy template is located at /.github/workflows/deploy.yaml
+- **The AWS Deployment:**
+  - **CloudFormation Setup:** Utilize CloudFormation for setting up AWS Lambda, API Gateway, and DynamoDB. This involves creating a CloudFormation template located at `/infra/cloudformation.yaml` that defines all necessary AWS resources, ensuring a consistent and repeatable deployment process.
+  - **Setting Up Correct Roles:** Define the correct IAM roles within the CloudFormation template to grant necessary permissions to each AWS service, ensuring secure and efficient access.
+  - **Passing Environment Variables from GitHub:** Configure the CI/CD pipeline to pass environment variables from GitHub to AWS, allowing dynamic configuration of the deployed services based on the deployment environment or secrets stored in GitHub.
 
 ## Challenges and Solutions
 
