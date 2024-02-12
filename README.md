@@ -82,7 +82,7 @@ To resolve this issue, I leveraged a simple yet effective solution: changing the
 
 webpack.config.js for esm
 
-    ```javascript
+    
     import path from 'path';
     import { fileURLToPath } from 'url';
     const __filename = fileURLToPath(import.meta.url);
@@ -117,8 +117,7 @@ webpack.config.js for esm
             outputModule: true,
         }
     };
-
-````
+    
 
 
 ### Challenge 6: Integrating Swagger Documentation with ESM and Switching Back to CommonJS
@@ -147,7 +146,7 @@ To ensure the functionality and reliability of your serverless application befor
 
    ```shell
    mkcert -cert-file cert.pem -key-file key.pem localhost
-````
+    ````
 
 This command generates two files: `cert.pem` and `cert-key.pem`, which are your local CA's certificate and key, respectively.
 
